@@ -1,0 +1,29 @@
+# build output (dist/base/base.jar is tracked on purpose; the rest of dist/ is local)
+dist/*
+!dist/base/
+dist/base/*
+!dist/base/base.jar
+build/
+out/
+target/
+
+# runtime files the app writes next to its jar
+*.mv.db
+*.trace.db
+*.lock.db
+BigRiceFun.log
+BigRiceFun-dict.txt
+
+# test / scratch
+__pycache__/
+*.pyc
+_test/
+*.log
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+desktop.ini
+.DS_Store
