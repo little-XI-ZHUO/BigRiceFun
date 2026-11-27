@@ -35,12 +35,18 @@ final class Rules {
             "invalid password", "invalid username", "invalid credentials", "invalid user", "incorrect password",
             "incorrect login", "authentication failed", "login failed", "logon failure", "bad password",
             "bad credentials", "wrong password", "wrong username", "password incorrect", "access denied",
-            "authentication error", "login error", "invalid login"};
+            "authentication error", "login error", "invalid login",
+            // JSON 接口的失败标志
+            "\"success\":false", "\"success\": false", "\"result\":\"fail\"", "\"result\": \"fail\"",
+            "\"result\":\"error\"", "\"result\": \"error\"", "\"status\":\"error\"", "\"status\": \"error\""};
 
     /** 登录成功页常见特征（相对基线新出现的才算）。 */
     static final String[] SUCCESS_KW = {"退出登录", "注销登录", "退出系统", "欢迎您", "欢迎回来", "welcome back",
             "logout", "sign out", "个人中心", "修改密码", "修改口令", "change password", "我的账户",
-            "dashboard", "待办事项", "worklist"};
+            "dashboard", "待办事项", "worklist",
+            // JSON 接口的成功标志（语义明确、失败响应里不会出现的）
+            "\"success\":true", "\"success\": true", "\"result\":\"success\"", "\"result\": \"success\"",
+            "\"result\":\"ok\"", "\"result\": \"ok\"", "\"status\":\"ok\"", "\"status\": \"ok\""};
 
     /** 跳转目标含这些词，说明还停在登录流程里。 */
     static final String[] LOGINISH = {"login", "signin", "sign-in", "error", "fail", "denied", "logout"};
@@ -124,11 +130,17 @@ final class Rules {
     }
 
     /** 通用登录入口路径。 */
-    static final String[] LOGIN_PATHS = {"/login", "/admin", "/admin/login", "/manager/login", "/user/login",
+    static final String[] LOGIN_PATHS = {"/login", "/login.html", "/login.htm", "/login.php", "/login.jsp",
+            "/admin", "/admin/login", "/manager/login", "/user/login",
             "/sys/login", "/system/login", "/jenkins/login", "/nacos/", "/xxl-job-admin/toLogin",
             "/druid/login.html", "/phpmyadmin/", "/zabbix/", "/console/login/LoginForm.jsp", "/manage",
             "/manager", "/index/login", "/api/login", "/member/login", "/login.aspx", "/login.asp",
-            "/admin.aspx", "/admin.asp", "/login.jsp", "/admin/login.jsp"};
+            "/admin.aspx", "/admin.asp", "/admin/login.jsp",
+            // 嵌入式设备（摄像头、NVR、门禁、路由器、打印机）
+            "/index.html", "/index.htm", "/web/login.html", "/web/login.htm", "/doc/login.html",
+            "/cgi-bin/luci", "/cgi-bin/login.cgi", "/goform/login", "/system/login.htm",
+            "/portal/login.html", "/admin/login.html", "/admin/login.htm", "/user/login.html",
+            "/Login", "/logon", "/home/login", "/auth/login", "/login/index", "/login/login"};
 
     /** 常见的 HTTP 认证入口（返回 401 就用对应字典试）。 */
     static final String[] AUTH_PATHS = {"/manager/html", "/admin", "/druid/index.html", "/api/overview",

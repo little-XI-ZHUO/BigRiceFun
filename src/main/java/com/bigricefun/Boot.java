@@ -34,6 +34,7 @@ import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.IdentityHashMap;
@@ -89,6 +90,17 @@ final class Boot {
     private volatile boolean appDone, finalized, stopped;
     private volatile long lastActivity;
     private int webTargets;
+
+    // ---- 进度 ----
+    private final Progress progress = new Progress();
+    /** 本轮扫描开始时线程池的已完成任务数（池是复用的，要减基线）。 */
+    private long scanBaseline = -1;
+    /** 已经算过总数的扫描任务数（taskList 是累加的，只算新增的）。 */
+    private int seenTasks;
+    /** 本轮已完成的 Web 检测数。 */
+    private volatile long auditDone;
+    /** 缓存的控制器实例（FXML 事件处理器里挖出来的）。 */
+    private Object controller;
 
     static void install(Stage stage) {
         new Boot().go(stage);
@@ -199,6 +211,14 @@ final class Boot {
             bar.getChildren().add(at, chkBrute);
         }
 
+        // 状态栏：左边放进度文字和细进度条。原程序会不停把状态 Label 覆写成 ip:port，
+        // 进度必须放在独立控件里才不会被冲掉
+        if (status.getParent() instanceof HBox) {
+            HBox bottom = (HBox) status.getParent();
+            bottom.getChildren().add(0, progress.bar());
+            bottom.getChildren().add(0, progress.text());
+        }
+
         // 状态栏：程序自己写 complete 时如果还有活没干完，立刻改回进行中
         status.textProperty().addListener((obs, old, val) -> onStatus(val));
         ScheduledExecutorService mono = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -229,6 +249,7 @@ final class Boot {
             appDone = false;
             audit.getQueue().clear();
             status.setText(STOPPED);
+            progress.show("已停止，用时 " + Progress.elapsed(System.currentTimeMillis() - progress.startedAt()), -2);
         } else if (STOPPED.equals(val)) {
             stopped = true;
             appDone = false;
@@ -240,10 +261,18 @@ final class Boot {
             stopped = false;
             finalized = false;
             appDone = false;
+            progress.begin();
+            auditDone = 0;
+            webTargets = 0;
+            ThreadPoolExecutor p = pool();
+            scanBaseline = p != null ? p.getCompletedTaskCount() : -1;
+            discoverScanTotal();
         }
     }
 
     private void tick() {
+        // 进度条随时更新：扫描一开始就要能看到进度，不能等完成信号
+        updateProgress();
         if (finalized || stopped || !appDone) {
             return;
         }
@@ -259,6 +288,52 @@ final class Boot {
                 status.setText(busy() ? progress() : P_SETTLE);
             }
         });
+    }
+
+    /** 刷新状态栏左侧的进度文字和进度条。两个阶段有重叠：扫描出结果时 Web 检测就开始了。 */
+    private void updateProgress() {
+        if (stopped) {
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - progress.startedAt();
+        if (elapsed < 0 || progress.startedAt() == 0) {
+            return; // 本轮还没开始
+        }
+        ThreadPoolExecutor p = pool();
+        long done = 0;
+        if (p != null) {
+            if (scanBaseline < 0) {
+                scanBaseline = p.getCompletedTaskCount();
+            }
+            done = p.getCompletedTaskCount() - scanBaseline;
+        }
+        long total = progress.scanTotal();
+        boolean scanPhase = scanning();
+
+        if (scanPhase) {
+            String eta = "";
+            double frac = -1;
+            String head;
+            if (total > 0) {
+                frac = (double) done / total;
+                if (done > 2 && done < total) {
+                    eta = String.format(" 剩余约%s", Progress.elapsed((long) ((total - done) * elapsed / done)));
+                }
+                head = String.format("扫描 %d%% (%d/%d)", (int) (frac * 100), done, total);
+            } else {
+                head = String.format("扫描中，已完成 %d", done);
+            }
+            String web = auditDone > 0 && webTargets > 0 ? String.format(" · Web %d/%d", auditDone, webTargets) : "";
+            progress.show(head + web + " 已用" + Progress.elapsed(elapsed) + eta, frac);
+            return;
+        }
+        if (audit.getActiveCount() > 0 || !audit.getQueue().isEmpty()) {
+            double frac = webTargets > 0 ? (double) auditDone / webTargets : -1;
+            progress.show(String.format("Web检测 %d/%d 已用%s", auditDone, webTargets, Progress.elapsed(elapsed)),
+                    frac);
+            return;
+        }
+        // 都没活：不动进度条（完成/停止的文案由别处写）
     }
 
     /** 找得到扫描线程池时 1.5 秒没动静就算完；找不到（理论上有超时兜着的尾巴任务）就多等。 */
@@ -314,6 +389,8 @@ final class Boot {
         ThreadPoolExecutor p = pool();
         String text = String.format("已完成（Web 服务 %d 个，存在风险的 %d 个，共 %d 条）", webTargets, copy.size(), items);
         status.setText(text);
+        progress.show(String.format("完成，总用时 %s", Progress.elapsed(System.currentTimeMillis() - progress.startedAt())),
+                1.0);
         System.out.println("[" + WebApp.NAME + "] " + text + "  auditActive=" + audit.getActiveCount()
                 + " auditQueue=" + audit.getQueue().size() + (p != null
                 ? " scanActive=" + p.getActiveCount() + " scanQueue=" + p.getQueue().size() : " scanPool=unknown"));
@@ -364,6 +441,7 @@ final class Boot {
     }
 
     void finish(Row row, RiskInfo info) {
+        auditDone++; // 每个 Web 检测结束都计数（没发现风险的也算），进度条靠它
         if (info.items.isEmpty()) {
             return;
         }
@@ -440,13 +518,66 @@ final class Boot {
 
     // ---------------- 读取程序内部状态 ----------------
 
+    /** 控制器实例（懒加载，挖一次缓存住）。 */
+    private Object controller() {
+        if (controller == null && root != null) {
+            try {
+                Button stop = (Button) root.lookup("#id_stop");
+                controller = controllerOf(stop.getOnAction(), 0, new IdentityHashMap<Object, Boolean>());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return controller;
+    }
+
     private ExecutorService findScanPool(Parent root) {
         try {
-            Button stop = (Button) root.lookup("#id_stop");
-            Object controller = controllerOf(stop.getOnAction(), 0, new IdentityHashMap<Object, Boolean>());
             Field f = FXMLDocumentController.class.getDeclaredField("threadPool");
             f.setAccessible(true);
-            return (ExecutorService) f.get(controller);
+            return (ExecutorService) f.get(controller());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 扫描任务总数。taskList 里累加着每轮的 ScanTask：ip:port 模式的总数 = 行数，
+     * IP×端口模式 = 目标数 × 端口数。只算新增的任务（seenTasks 记录已算过的）。
+     */
+    private void discoverScanTotal() {
+        try {
+            Object c = controller();
+            if (c == null) {
+                return;
+            }
+            Field f = FXMLDocumentController.class.getDeclaredField("taskList");
+            f.setAccessible(true);
+            java.util.List<?> tasks = (java.util.List<?>) f.get(c);
+            long total = 0;
+            for (int i = seenTasks; i < tasks.size(); i++) {
+                Object t = tasks.get(i);
+                Collection<?> ips = (Collection<?>) fieldOf(t, "ips");
+                Collection<?> ports = (Collection<?>) fieldOf(t, "ports");
+                if (ips == null) {
+                    continue;
+                }
+                total += ports != null ? (long) ips.size() * ports.size() : ips.size();
+            }
+            seenTasks = tasks.size();
+            if (total > 0) {
+                progress.setScanTotal(total);
+            }
+        } catch (Exception e) {
+            // 反射失败就退化为"总数未知"，进度条显示流动状态
+        }
+    }
+
+    private static Collection<?> fieldOf(Object obj, String name) {
+        try {
+            Field f = obj.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+            return (Collection<?>) f.get(obj);
         } catch (Exception e) {
             return null;
         }

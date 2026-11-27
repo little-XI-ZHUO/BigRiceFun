@@ -15,6 +15,8 @@ port  mode            expected result
 18092 backup          备份文件可下载 /www.zip
 18093 spa_fallback    nothing (every path returns 200 index.html)
 18094 index_of        目录浏览
+18095 device_js       弱口令 admin/admin（嵌入式设备：无 <form>，登录页在 /login.htm，JS 提交返回 JSON）
+18096 device_strong   nothing (同上结构，但只有强口令 — 误报对照)
 18099 closed          no row at all
 """
 import base64
@@ -46,10 +48,32 @@ LAB = {
     18092: ("backup", {}),
     18093: ("spa_fallback", {}),
     18094: ("index_of", {}),
+    18095: ("device_js", {"admin": "admin"}),
+    18096: ("device_strong", {"admin": "NOPE"}),
 }
 PAGE = "<!doctype html><html><head><meta charset='utf-8'><title>%s</title></head><body>%s</body></html>"
 WRONG = {}
 ZIP_BYTES = b"PK\x03\x04" + bytes(2048) + b"PK\x05\x06" + bytes(18)
+
+# 嵌入式设备风格的登录页：没有 <form>，散落的 input，JS 发 POST /api/login 拿 JSON。
+# 首页是欢迎页，带一个指向 /login.htm 的链接。模拟 Mongoose 类设备的真实结构。
+DEVICE_INDEX = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>设备首页</title></head>
+<body><h1>设备欢迎页面</h1><a href="/login.htm">进入登录</a></body></html>"""
+DEVICE_LOGIN = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>登录</title>
+<style>body{background:#111;color:#eee;font-family:sans-serif}</style></head>
+<body><div id="login"><h2>欢迎登录</h2>
+<input type="text" id="username" placeholder="用户名" value="admin">
+<input type="password" id="password" placeholder="密码">
+<button id="btn" onclick="doLogin()">登 录</button></div>
+<script src="/static/jquery.min.js"></script>
+<script>
+function doLogin() {
+  $.ajax({ url: "/api/login", type: "POST", dataType: "json",
+    data: { username: $("#username").val(), password: $("#password").val() },
+    success: function(r) { if (r.success) { location.href = "/index.htm"; } else { alert(r.msg); } } });
+}
+</script></body></html>"""
+DEVICE_SESSION = {}
 
 
 def md5(s):
@@ -233,6 +257,16 @@ class H(http.server.BaseHTTPRequestHandler):
             self._send(200, PAGE % ("单页应用", "app root"))
         elif m == "index_of":
             self._send(200, "<html><head><title>Index of /</title></head><body><a href=old/>old/</a></body></html>")
+        elif m in ("device_js", "device_strong"):
+            # 嵌入式设备：首页欢迎页 -> /login.htm 登录页；其它路径 404
+            if p in ("/", "/index.html", "/index.htm"):
+                self._send(200, DEVICE_INDEX, headers=[("Server", "Mongoose/6.18")])
+            elif p in ("/login.htm", "/login.html"):
+                self._send(200, DEVICE_LOGIN, headers=[("Server", "Mongoose/6.18")])
+            elif p.startswith("/static/"):
+                self._send(200, "/*stub*/", ctype="application/javascript", headers=[("Server", "Mongoose/6.18")])
+            else:
+                self._send(404, PAGE % ("404", "not found"), headers=[("Server", "Mongoose/6.18")])
         else:
             self._send(404, PAGE % ("404", "not found"))
 
@@ -241,6 +275,13 @@ class H(http.server.BaseHTTPRequestHandler):
         q = parse_qs(self.rfile.read(n).decode("utf-8", "replace"))
         u = (q.get("username") or [""])[0]
         p = (q.get("password") or [""])[0]
+        if self.mode in ("device_js", "device_strong") and self.path.startswith("/api/login"):
+            # 和真实设备一样：JSON 应答，成功时带 token，失败时 success:false
+            ok = self.creds.get(u) == p
+            body = (json.dumps({"success": True, "token": "sess-" + uuid.uuid4().hex[:8]})
+                    if ok else json.dumps({"success": False, "msg": "用户名或密码错误"}))
+            self._send(200, body, ctype="application/json", headers=[("Server", "Mongoose/6.18")])
+            return
         if self.mode in ("form_weak", "form_strong", "lockout") and self.path.startswith("/login"):
             key = (self.server.server_address[1], u)
             if self.mode == "lockout" and WRONG.get(key, 0) >= 3:

@@ -8,6 +8,7 @@ import org.apache.http.message.BasicNameValuePair;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -271,13 +272,14 @@ final class WebAudit implements Runnable {
 
     /** 表单登录的弱口令：先用随机账号打一遍当基线，再逐组比较差异。 */
     private void formLogin(Http.Resp root) {
-        Form form = null;
         String page = null;
         String pageUrl = null;
+        // 1) 首页本身就是登录页
         if (root.status == 200 && Form.hasPassword(root.body)) {
             page = root.body;
             pageUrl = root.finalUrl;
         } else {
+            // 2) 逐个试登录路径。注意：有的站 302 到 login 页，get() 已经跟过去了，所以要看跟过去的页面
             for (String p : Rules.LOGIN_PATHS) {
                 if (over()) {
                     break;
@@ -291,12 +293,24 @@ final class WebAudit implements Runnable {
                 break;
             }
         }
+        // 3) 首页有指向登录页的链接（<a href="/login.htm">、location.href="login.htm"），顺着找
+        if (page == null && root.status == 200) {
+            String guess = loginLink(root.body, root.finalUrl);
+            if (guess != null && !guess.equalsIgnoreCase(root.finalUrl)) {
+                Http.Resp r = get(guess);
+                if (r != null && r.status == 200 && Form.hasPassword(r.body)) {
+                    page = r.body;
+                    pageUrl = r.finalUrl;
+                }
+            }
+        }
         if (page == null) {
             return;
         }
-        form = Form.parse(pageUrl, page);
+        Form form = Form.parse(pageUrl, page);
         if (form == null) {
-            add("信息", "弱口令", "发现登录框（非标准表单，未自动爆破）", pageUrl, null, null,
+            // 看到了密码框但解析不出登录框——至少留条线索，不能静默放过
+            add("信息", "弱口令", "发现密码输入框（未能识别登录表单）", pageUrl, null, null,
                     "标题：" + clip(Form.title(page), 60), "人工确认该登录口。");
             return;
         }
@@ -308,9 +322,12 @@ final class WebAudit implements Runnable {
         List<String[]> pairs = Rules.pairsForForm(page, form.userField == null);
         Http.Resp base = post(form, junk(), junk(), new BasicCookieStore());
         if (base == null || base.status == 0) {
+            add("信息", "弱口令", "发现登录框（提交无响应）", form.action, null, null,
+                    "标题：" + clip(form.title, 60) + "；表单：" + form, "人工确认该登录口。");
             return;
         }
         String product = Rules.product(page);
+        boolean loginWorks = false;
         for (String[] up : pairs) {
             if (over()) {
                 break;
@@ -322,6 +339,7 @@ final class WebAudit implements Runnable {
             }
             String verdict = judge(base, r);
             if ("LOCK".equals(verdict)) {
+                loginWorks = true;
                 add("信息", "弱口令", "登录口触发锁定保护，已停止爆破", form.action, null, null,
                         "出现锁定提示，未再继续尝试", "确认账号是否被锁；该登录口需人工控制节奏。");
                 break;
@@ -340,12 +358,69 @@ final class WebAudit implements Runnable {
                 evidence = "登录返回 " + r.status + " → " + r.location + "，跟随后页面标题："
                         + clip(Form.title(after.body), 60);
             } else {
-                evidence = "登录后不再出现密码框，页面标题：" + clip(Form.title(r.body), 60);
+                // 没有 <form> 的页面（JS 提交）多半返回 JSON，"密码框消失"不足以证明登录成功，
+                // 必须出现明确的成功特征才算，否则会误报
+                if (form.virtual && "NOPW".equals(verdict)) {
+                    continue;
+                }
+                // 证据如实写判定依据：KW=响应里出现成功标志，NOPW=密码框消失
+                if ("KW".equals(verdict)) {
+                    String kw = "";
+                    for (String k : Rules.SUCCESS_KW) {
+                        if (lower(r.body).contains(k)) {
+                            kw = k;
+                            break;
+                        }
+                    }
+                    evidence = "登录响应出现成功标志 " + kw + "；响应片段：" + clip(r.body, 120);
+                } else {
+                    String t = clip(Form.title(r.body), 60);
+                    evidence = "登录后不再出现密码框" + (t.isEmpty() ? "" : "，页面标题：" + t)
+                            + "；响应片段：" + clip(r.body, 120);
+                }
             }
+            loginWorks = true;
             add(product != null ? "严重" : "高危", "弱口令", "弱口令 " + up[0] + "/" + empty(up[1]), form.action,
                     up[0], up[1], evidence, A_PASS);
             break;
         }
+        if (!loginWorks) {
+            // 试完了但判不出结果。JS 登录页的提交地址是猜的，猜错就是白试——留条线索让人复核
+            add("信息", "弱口令", form.virtual ? "发现 JS 登录框，未能确认口令" : "发现登录框，未发现弱口令",
+                    pageUrl, null, null,
+                    "表单：" + form + "；试了 " + pairs.size() + " 组" + (form.virtual ? "；提交地址可能猜错" : ""),
+                    form.virtual ? "人工确认登录接口后再测。" : "");
+        }
+    }
+
+    private static final Pattern LOGIN_LINK = Pattern.compile(
+            "(?is)(?:href|location(?:\\.href)?|src|url)\\s*[:=]\\s*[\"']([^\"'\\s>]{1,120})[\"']");
+
+    /** 从首页里找指向登录页的链接：路径或文字里带 login/登录，排除当前页。 */
+    private String loginLink(String html, String pageUrl) {
+        if (html == null) {
+            return null;
+        }
+        Matcher m = LOGIN_LINK.matcher(html);
+        while (m.find()) {
+            String cand = m.group(1).trim();
+            String low = cand.toLowerCase();
+            if (cand.startsWith("#") || cand.startsWith("javascript:") || cand.startsWith("data:")
+                    || low.endsWith(".css") || low.endsWith(".js") || low.endsWith(".png") || low.endsWith(".jpg")
+                    || low.endsWith(".gif") || low.endsWith(".ico") || low.endsWith(".svg")) {
+                continue;
+            }
+            boolean loginish = low.contains("login") || low.contains("signin") || low.contains("logon")
+                    || cand.contains("登录") || low.contains("auth");
+            if (!loginish) {
+                continue;
+            }
+            String abs = Http.resolve(pageUrl, cand);
+            // 去掉锚点
+            int h = abs.indexOf('#');
+            return h > 0 ? abs.substring(0, h) : abs;
+        }
+        return null;
     }
 
     private Http.Resp post(Form form, String user, String pass, BasicCookieStore jar) {
@@ -384,6 +459,15 @@ final class WebAudit implements Runnable {
                 return "LOCK";
             }
         }
+        // 明确的 JSON 成功标志优先判：JS 登录页的基线和结果都是 JSON，都没有密码框，
+        // 不先判这里的话后面会因为"两边都没密码框"直接放弃
+        if (r.status == 200) {
+            for (String k : Rules.SUCCESS_KW) {
+                if (b.contains(k) && !bb.contains(k)) {
+                    return "KW";
+                }
+            }
+        }
         boolean newFail = false;
         for (String k : Rules.FAIL_KW) {
             if (b.contains(k) && !bb.contains(k)) {
@@ -415,11 +499,6 @@ final class WebAudit implements Runnable {
             return (r.setCookie
                     || Math.abs(r.body.length() - base.body.length()) > Math.max(300, base.body.length() / 2))
                     ? "NOPW" : null;
-        }
-        for (String k : Rules.SUCCESS_KW) {
-            if (b.contains(k) && !bb.contains(k)) {
-                return "KW";
-            }
         }
         return null;
     }

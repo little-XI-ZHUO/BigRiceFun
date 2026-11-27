@@ -66,10 +66,11 @@ public class TestDrive extends WebApp {
 
         FXMLDocumentController.taskCount = Integer.valueOf(0);
         final ExecutorService pool = Executors.newFixedThreadPool(threads);
-        setControllerPool(root, pool); // 和真点 start 一样，把线程池交给控制器，状态监控才能看到它
         ScanTask task = new ScanTaskIpPort(ips, null, tree.getRoot(), pool, FXMLDocumentController.taskCount,
                 table, timeout, status, auto);
         FXMLDocumentController.taskCount = Integer.valueOf(FXMLDocumentController.taskCount + 1);
+        // 和真点 start 完全一样：线程池和任务都交给控制器（进度总数从 taskList 来）
+        wireController(root, pool, task);
         System.out.printf("SCAN   %+6dms start: %d targets, %d threads, %dms%n", System.currentTimeMillis() - t0,
                 ips.size(), threads, timeout);
         new Thread((Runnable) task, "scan").start();
@@ -180,15 +181,21 @@ public class TestDrive extends WebApp {
     }
 
     /** 把测试用的线程池写进控制器的 threadPool 字段，模拟 start 按钮的行为。 */
-    private void setControllerPool(Parent root, ExecutorService pool) {
+    /** 和真点 start 一样：把线程池写进控制器，任务加进 taskList。 */
+    private void wireController(Parent root, ExecutorService pool, ScanTask task) {
         try {
             Object handler = ((javafx.scene.control.Button) root.lookup("#id_stop")).getOnAction();
             Object controller = findController(handler, 0, new java.util.IdentityHashMap<Object, Boolean>());
-            java.lang.reflect.Field f = FXMLDocumentController.class.getDeclaredField("threadPool");
-            f.setAccessible(true);
-            f.set(controller, pool);
+            java.lang.reflect.Field pf = FXMLDocumentController.class.getDeclaredField("threadPool");
+            pf.setAccessible(true);
+            pf.set(controller, pool);
+            java.lang.reflect.Field tf = FXMLDocumentController.class.getDeclaredField("taskList");
+            tf.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            java.util.List<Object> tasks = (java.util.List<Object>) tf.get(controller);
+            tasks.add(task);
         } catch (Exception e) {
-            System.out.println("setControllerPool failed: " + e);
+            System.out.println("wireController failed: " + e);
         }
     }
 
