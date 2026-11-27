@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import javafx.application.Application;
 

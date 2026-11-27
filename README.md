@@ -1,10 +1,16 @@
-# BigRiceFun
+# BigRiceScan（大米饭）
 
-内网 Web 资产测绘 + Web 风险检测。
+内网 Web 资产测绘 + Web 漏洞扫描 / 风险检测工具：Web 弱口令检测、Web 未授权访问检测。
+
+**BigRiceScan is an offline intranet web asset discovery and vulnerability scanner:
+port scanning & service fingerprinting, web weak-credential auditing (form / HTTP Basic /
+HTTP Digest, including JS-rendered login pages without `<form>`), and unauthorized-access
+detection (Spring Actuator, Nacos, Druid, Tomcat Manager, Jenkins, Docker API, K8s, and ~50
+more signatures). JavaFX GUI, runs fully offline, no AI needed.**
 
 离线运行，图形界面，不依赖 AI。
 
-![BigRiceFun](docs/screenshot-main.png)
+![BigRiceScan](docs/screenshot-main.png)
 
 ## 它做什么
 
@@ -12,7 +18,7 @@
 
 1. **扫端口、识别服务、抓网页标题**
 2. **Web 弱口令**：自动找登录表单并试口令，支持表单登录、HTTP Basic、HTTP Digest（含无 `<form>` 的 JS 登录页）
-3. **Web 未授权访问**：约 50 条特征，命中就给证据
+3. **Web 未授权访问**：51 条特征，命中就给证据
 4. **表格加一列「风险」**，按严重/高危/中危/低危/信息着色，点行看完整证据
 5. **一键导出风险 CSV**（UTF-8 BOM，Excel 直接打开）
 6. **状态栏进度条**：百分比、已完成/总数、Web 检测进度、已用时间和预计剩余，完成时机是真实的（扫描和检测全部结束才显示「已完成」）
@@ -24,7 +30,7 @@
 ```
 1. 装 Java 8（必须是 8，Java 11+ 不带 JavaFX）
 2. 双击 build.bat（或 python -I tools/build.py）
-3. 双击 dist\BigRiceFun.bat
+3. 双击 dist\BigRiceScan.bat
 4. 点「新建扫描」，填网段，点「开始扫描」
 5. 看「风险」列，点行看证据，点「导出风险」存 CSV
 ```
@@ -32,9 +38,9 @@
 ### 建桌面快捷方式
 
 不想每次进 `dist` 目录找 bat，双击一次 `dist\create-shortcut.bat` 就行，会在桌面生成
-`BigRiceFun.lnk`，图标用的是自带的那张。
+`BigRiceScan.lnk`，图标用的是自带的那张。
 
-快捷方式指向 `dist\BigRiceFun.bat`，图标取自 `dist\BigRiceFun.ico`（也是同一套图标），
+快捷方式指向 `dist\BigRiceScan.bat`，图标取自 `dist\BigRiceScan.ico`（也是同一套图标），
 所以桌面图标和窗口标题栏是同一个。
 
 删除快捷方式直接删桌面那个 `.lnk` 就行，不会动程序本体。
@@ -73,7 +79,7 @@ scanning...  →  (扫描中… 剩余 N)  →  (Web 检测中… 剩余 N)  →
 
 | 方式 | 做法 |
 |---|---|
-| 表单登录 | 首页 + 25 个常见登录路径找带密码框的表单；带验证码的只标记不爆破 |
+| 表单登录 | 首页 + 47 个常见登录路径找带密码框的表单；无 `<form>` 的 JS 登录页会构造虚拟表单提交；带验证码的只标记不爆破 |
 | HTTP Basic | 根路径及 `/manager/html` `/admin` `/druid/index.html` `/api/overview` `/console` `/solr/` `/nacos/` 返回 401 时试对应默认口令 |
 | HTTP Digest | 同上（摄像头、部分网络设备用这种） |
 
@@ -94,7 +100,7 @@ Consul、etcd、Harbor、Hadoop Yarn/HDFS、Flink、Spark、Elasticsearch、Solr
 
 ## 调字典
 
-jar 同目录放 `BigRiceFun-dict.txt`（见 `dist\BigRiceFun-dict.example.txt`）：
+jar 同目录放 `BigRiceScan-dict.txt`（见 `dist\BigRiceScan-dict.example.txt`）：
 
 ```
 # 每行 用户名:口令，会替换内置的 8 组通用口令
@@ -110,21 +116,22 @@ test:Test@123
 ## 目录结构
 
 ```
-BigRiceFun/
-├── src/main/java/com/bigricefun/   自己的代码
+BigRiceScan/
+├── src/main/java/com/bigricescan/   自己的代码
 │   ├── Launch.java     jar 入口
 │   ├── WebApp.java     挂图标、标题和检测
-│   ├── Boot.java       风险列、开关、导出、状态栏完成判定
+│   ├── Boot.java       风险列、开关、导出、状态栏完成判定与进度条
 │   ├── WebAudit.java   单个 Web 服务的检测流程
 │   ├── Rules.java      特征、登录路径、字典
-│   ├── Form.java       登录表单解析（jsoup）
+│   ├── Form.java       登录表单解析（jsoup，含无 form 的 JS 登录页）
 │   ├── Http.java       HTTP 客户端（用 jar 自带的 httpclient，支持 Basic/Digest）
+│   ├── Progress.java   状态栏进度估算
 │   └── RiskItem.java / RiskInfo.java
 ├── assets/              logo 与图标
 ├── tools/build.py       构建 + 打包 + 校验
 ├── test/TestDrive.java  测试驱动（不进 jar）
 ├── docs/                截图
-└── dist/                构建产物（jar、启动脚本、图标、字典示例）
+└── dist/                构建产物（jar、启动脚本、图标、字典示例；base.jar 随仓库分发）
 ```
 
 ## 构建
@@ -135,7 +142,7 @@ python -I tools/build.py
 
 需要 Python 3 和 JDK 8（不带第三方 Python 包）。脚本会：
 
-1. 取基础 jar（本地缓存或已有 jar，带 SHA-256 校验）
+1. 取基础 jar（仓库自带 `dist/base/base.jar`，也可用 `--base` 或环境变量 `BIGRICESCAN_BASE_JAR` 指定，带 SHA-256 校验）
 2. 用 JDK 8 编译 `src/main/java`
 3. 打包：2,733 个条目逐字节复制，只换 manifest 的 Main-Class，加上自己的类和图标
 4. **校验：条目只要有一个变了就构建失败**
@@ -143,8 +150,7 @@ python -I tools/build.py
 
 ## 已知限制
 
-- **打不动的登录口**：验证码、短信二次验证、前端加密口令、AJAX 提交且没有 `<form>` 的页面。
-  前两种标「信息」，后两种可能识别不到登录框
+- **打不动的登录口**：验证码、短信二次验证、前端加密口令。前两种标「信息」，最后一种提交了也判不出成败
 - **风险只存在内存里**，本次运行有效，不写进 H2 库；要留存请用「导出风险」。
   「导出为文本文件」也会把风险详情带在「响应」列里
 - **每个 Web 服务约 100 个请求**（特征 + 登录路径 + 爆破），12 个线程并行
@@ -155,3 +161,12 @@ python -I tools/build.py
 ## 授权与出处
 
 只用于授权范围内的安全检查。
+
+## 关键词 / Keywords
+
+内网 Web 工具，web 扫描，web 漏扫，web 未授权检测，web 弱口令检测，内网 Web 资产测绘，
+Web 漏洞扫描，未授权访问，默认口令， Spring Actuator 未授权，Nacos 未授权，Druid 未授权，
+Tomcat Manager 弱口令，海康大华默认口令；
+web scanner, web vulnerability scanner, intranet web tool, unauthorized access detection,
+weak credential audit, default password, web asset discovery, port scanning,
+Spring Boot Actuator, exposure check, security audit, penetration testing.

@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;

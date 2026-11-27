@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -11,14 +11,14 @@ import java.util.Map;
 
 /**
  * 内置规则：未授权特征、登录入口、字典。都是静态表，改这里就改行为。
- * jar 同目录放一个 BigRiceFun-dict.txt（每行 user:pass，可用 max=N 调尝试上限）可覆盖通用字典。
+ * jar 同目录放一个 BigRiceScan-dict.txt（每行 user:pass，可用 max=N 调尝试上限）可覆盖通用字典。
  */
 final class Rules {
     private Rules() {}
 
     /**
      * 通用字典最多试几组。通用口令会打到可能接了域账号的登录口，默认 8 组偏保守；
-     * jar 旁的 BigRiceFun-dict.txt 里写 max=N 可放开。产品专属默认口令不占这个额度。
+     * jar 旁的 BigRiceScan-dict.txt 里写 max=N 可放开。产品专属默认口令不占这个额度。
      */
     static final int MAX_GENERIC_DEFAULT = 8;
     static int maxGeneric = MAX_GENERIC_DEFAULT;
@@ -215,7 +215,7 @@ final class Rules {
     }
 
     static void loadDict(File dir) {
-        File f = new File(dir, "BigRiceFun-dict.txt");
+        File f = new File(dir, "BigRiceScan-dict.txt");
         if (!f.isFile()) {
             return;
         }

@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;

@@ -23,5 +23,5 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-echo Done. Run dist\BigRiceFun.bat to start.
+echo Done. Run dist\BigRiceScan.bat to start.
 pause

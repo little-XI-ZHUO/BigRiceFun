@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import java.util.ArrayList;
 import java.util.Collections;

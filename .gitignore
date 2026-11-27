@@ -11,8 +11,8 @@ target/
 *.mv.db
 *.trace.db
 *.lock.db
-BigRiceFun.log
-BigRiceFun-dict.txt
+BigRiceScan.log
+BigRiceScan-dict.txt
 
 # test / scratch
 __pycache__/

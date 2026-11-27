@@ -27,7 +27,7 @@ def api(tok, method, path, payload=None):
     req = urllib.request.Request(API + path, data=data, method=method, headers={
         "Authorization": "Bearer " + tok,
         "Accept": "application/vnd.github+json",
-        "User-Agent": "BigRiceFun-setup",
+        "User-Agent": "BigRiceScan-setup",
         "Content-Type": "application/json",
     })
     try:
@@ -41,7 +41,7 @@ def api(tok, method, path, payload=None):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    name = args[0] if args else "BigRiceFun"
+    name = args[0] if args else "BigRiceScan"
     public = "--public" in sys.argv
     tok = token()
 

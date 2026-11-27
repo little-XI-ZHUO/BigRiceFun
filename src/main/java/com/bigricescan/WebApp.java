@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import com.webfinder.portscan.PortScan;
 
@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * BigRiceFun 入口。加载界面、建库、显示窗口，换上自己的名字和图标，并挂上 Web 检测。
+ * BigRiceScan 入口。加载界面、建库、显示窗口，换上自己的名字和图标，并挂上 Web 检测。
  */
 public class WebApp extends PortScan {
-    public static final String NAME = "BigRiceFun";
+    public static final String NAME = "BigRiceScan";
     public static final String VERSION = "1.0.0";
     private static final int[] ICON_SIZES = {16, 20, 24, 32, 48, 64, 128, 256};
 

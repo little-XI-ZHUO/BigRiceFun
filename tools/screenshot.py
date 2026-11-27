@@ -1,6 +1,6 @@
-"""Capture the BigRiceFun window to docs/screenshot-main.png (Windows).
+"""Capture the BigRiceScan window to docs/screenshot-main.png (Windows).
 
-Finds the visible top-level window whose title contains "BigRiceFun", moves it fully onto
+Finds the visible top-level window whose title contains "BigRiceScan", moves it fully onto
 the primary screen, and copies that screen region into a PNG.
 
 usage: python -I tools/screenshot.py <out.png> [title]
@@ -37,7 +37,7 @@ def find_window(pid, needle):
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "docs/screenshot-main.png"
-    needle = sys.argv[2] if len(sys.argv) > 2 else "BigRiceFun"
+    needle = sys.argv[2] if len(sys.argv) > 2 else "BigRiceScan"
     pid = int(sys.argv[3]) if len(sys.argv) > 3 else 0
 
     cands = find_window(pid, needle) if pid else []

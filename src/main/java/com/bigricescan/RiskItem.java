@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 /** 一条风险。severity 用 严重/高危/中危/低危/信息。 */
 final class RiskItem {

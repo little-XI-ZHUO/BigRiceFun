@@ -1,4 +1,4 @@
-import com.bigricefun.WebApp;
+import com.bigricescan.WebApp;
 import com.webfinder.portscan.FXMLDocumentController;
 import com.webfinder.portscan.ScanTask;
 import com.webfinder.portscan.ScanTaskIpPort;
@@ -24,7 +24,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * New Scan "start" button does, logs every status-bar change with a timestamp, and exits
  * a little after the status says done.
  *
- * usage: java -Dtargets=127.0.0.1:18081,127.0.0.1:18082 -cp test;BigRiceFun.jar TestDrive
+ * usage: java -Dtargets=127.0.0.1:18081,127.0.0.1:18082 -cp test;BigRiceScan.jar TestDrive
  */
 public class TestDrive extends WebApp {
     private static long t0;

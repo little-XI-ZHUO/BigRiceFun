@@ -1,4 +1,4 @@
-package com.bigricefun;
+package com.bigricescan;
 
 import com.webfinder.portscan.model.Row;
 import org.apache.http.NameValuePair;

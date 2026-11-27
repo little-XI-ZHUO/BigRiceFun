@@ -1,10 +1,10 @@
-"""Build BigRiceFun.
+"""Build BigRiceScan.
 
 Steps:
-  1. get the base jar - from --base, from the build cache, or from BIGRICEFUN_BASE_JAR
+  1. get the base jar - from --base, from the build cache, or from BIGRICESCAN_BASE_JAR
   2. compile src/main/java (JDK 8)
   3. package: every base entry is copied byte-for-byte; only the manifest's Main-Class
-     changes, and com/bigricefun/*.class plus the brand icons are added
+     changes, and com/bigricescan/*.class plus the brand icons are added
   4. verify: all base entries must be identical, otherwise the build fails
   5. assemble dist/ as a ready-to-run folder (jar, launcher, icon, dictionary example)
 
@@ -22,17 +22,17 @@ import tempfile
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "src", "main", "java", "com", "bigricefun")
+SRC = os.path.join(ROOT, "src", "main", "java", "com", "bigricescan")
 ASSETS = os.path.join(ROOT, "assets")
 DIST = os.path.join(ROOT, "dist")
 BUILD = os.path.join(DIST, "build")
-OUT_JAR = os.path.join(DIST, "BigRiceFun.jar")
+OUT_JAR = os.path.join(DIST, "BigRiceScan.jar")
 
-APP_NAME = "BigRiceFun"
+APP_NAME = "BigRiceScan"
 VERSION = "1.0.0"
-MAIN_CLASS = "com.bigricefun.Launch"
+MAIN_CLASS = "com.bigricescan.Launch"
 
-# Base jar: provided locally (env BIGRICEFUN_BASE_JAR, --base, or dist/base cache).
+# Base jar: provided locally (env BIGRICESCAN_BASE_JAR, --base, or dist/base cache).
 BASE_SHA256 = "5661f72dc4f4a65202d74d10db65aeef8cc2bbb9cdadd651b552aaab70c89d9b"
 
 MANIFEST = ("Manifest-Version: 1.0\r\n"
@@ -59,7 +59,7 @@ def get_base(explicit):
         check_base(data, explicit)
         return data
 
-    env = os.environ.get("BIGRICEFUN_BASE_JAR")
+    env = os.environ.get("BIGRICESCAN_BASE_JAR")
     if env and os.path.isfile(env):
         with open(env, "rb") as fh:
             data = fh.read()
@@ -79,7 +79,7 @@ def get_base(explicit):
                 say("cached jar has a wrong hash, skipping: " + path)
 
     raise SystemExit("cannot obtain the base jar.\n"
-                     "Put it in dist/base/, set BIGRICEFUN_BASE_JAR, or pass: --base <path>")
+                     "Put it in dist/base/, set BIGRICESCAN_BASE_JAR, or pass: --base <path>")
 
 
 def check_base(data, where):
@@ -156,7 +156,7 @@ def package(classes, pristine):
         for root, _, files in os.walk(classes):
             for f in sorted(files):
                 if f.endswith(".class"):
-                    zout.write(os.path.join(root, f), "com/bigricefun/" + f, compress_type=zipfile.ZIP_DEFLATED)
+                    zout.write(os.path.join(root, f), "com/bigricescan/" + f, compress_type=zipfile.ZIP_DEFLATED)
         for f in sorted(os.listdir(icons)):
             if f.endswith(".png"):
                 zout.write(os.path.join(icons, f), "brand/" + f, compress_type=zipfile.ZIP_DEFLATED)
@@ -226,8 +226,8 @@ echo shortcut created on the desktop
 endlocal
 """
 
-DICT_EXAMPLE = """# BigRiceFun 通用弱口令字典
-# 用法：把这个文件改名为 BigRiceFun-dict.txt，放在 BigRiceFun.jar 同目录，重启生效。
+DICT_EXAMPLE = """# BigRiceScan 通用弱口令字典
+# 用法：把这个文件改名为 BigRiceScan-dict.txt，放在 BigRiceScan.jar 同目录，重启生效。
 #
 # 每行一组「用户名:口令」，会替换内置的 8 组通用口令（产品专属默认口令不受影响）。
 # max=N  通用字典最多试几组，默认 8。通用口令可能打到接了域账号的登录口，

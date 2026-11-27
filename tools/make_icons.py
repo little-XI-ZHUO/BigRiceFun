@@ -1,4 +1,4 @@
-"""Build the BigRiceFun / 野人先生 icon set from the extracted logo master.
+"""Build the BigRiceScan / 野人先生 icon set from the extracted logo master.
 
 The brand mark is a single-colour silhouette (orange shape, the flame is a cut-out that
 opens into the notch at the bottom). The master is therefore flattened to one colour
